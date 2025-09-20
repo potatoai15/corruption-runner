@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corruption Runner</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #87CEEB 0%, #E0F6FF 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 400px;
+            background: linear-gradient(90deg, #B8E6FF 0%, #E6F3FF 100%);
+            border-radius: 8px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .game-area {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: hsl(240, 100%, 70%);
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .obstacle {
+            position: absolute;
+            background: hsl(0, 70%, 50%);
+            border-radius: 4px;
+            box-shadow: 0 2px 4px hsl(0, 70%, 40%);
+        }
+
+        .jetpack-flame {
+            position: absolute;
+            background: hsl(120, 100%, 51%);
+            border-radius: 50%;
+            opacity: 0.8;
+            animation: flicker 0.1s infinite alternate;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.6; transform: scale(1); }
+            100% { opacity: 0.9; transform: scale(1.1); }
+        }
+
+        .score {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            font-weight: bold;
+            color: hsl(220, 15%, 25%);
+            text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.8);
+            z-index: 20;
+        }
+
+        /* Overlay always above everything */
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .overlay h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .overlay h2 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .overlay p {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+            padding: 0 1rem;
+        }
+
+        .overlay .small {
+            font-size: 0.9rem;
+            color: #ccc;
+            margin-bottom: 2rem;
+        }
+
+        .game-button {
+            background: hsl(240, 100%, 70%);
+            color: white;
+            font-weight: bold;
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .game-button:hover {
+            background: hsl(240, 100%, 60%);
+        }
+
+        .game-button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Mobile Controls */
+        .controls {
+    display: flex;
+    justify-content: space-between; /* arrows left, jetpack right */
+    align-items: center;
+    width: 100%;
+    max-width: 800px;   /* match game-container width */
+    margin: 1.5rem auto 0 auto; /* center it under the game box */
+    padding: 10px;
+    gap: 1rem;
+    z-index: 10; /* under overlay */
+}
+
+        .directional-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+
+        .control-button {
+            background: hsl(240, 100%, 70%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .control-button:active {
+            background: hsl(240, 100%, 60%);
+            transform: translateY(1px);
+        }
+
+        .jetpack-button {
+            background: hsl(240, 100%, 70%);
+            color: white;
+            border: none;
+            padding: 1.5rem 3rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .jetpack-button:active {
+            background: hsl(240, 100%, 60%);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 850px) {
+            .game-container {
+                width: 100%;
+                max-width: 800px;
+                margin: 0 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="score" id="score">Score: 0</div>
+        
+        <div class="game-area" id="gameArea">
+            <div class="player" id="player"></div>
+        </div>
+
+        <!-- Start Screen -->
+        <div class="overlay" id="startScreen">
+            <h1>Corrupt Runner</h1>
+            <p>Fly with your jetpack and dodge obstacles!</p>
+            <p class="small">Run from the people you stole money from.<br>Stay alive longer to get higher scores.</p>
+            <button class="game-button" onclick="startGame()">Start Running</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div class="overlay hidden" id="gameOverScreen">
+            <h2>Corruption Over!</h2>
+            <p id="finalScore">Final Score: 0</p>
+            <p class="small">Great Running!</p>
+            <button class="game-button" onclick="restartGame()">Run Again</button>
+        </div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="controls hidden" id="mobileControls">
+        <div class="directional-pad">
+            <div></div>
+            <button class="control-button"
+                    onmousedown="setKey('up', true)" onmouseup="setKey('up', false)"
+                    ontouchstart="setKey('up', true)" ontouchend="setKey('up', false)">↑</button>
+            <div></div>
+            
+            <button class="control-button"
+                    onmousedown="setKey('left', true)" onmouseup="setKey('left', false)"
+                    ontouchstart="setKey('left', true)" ontouchend="setKey('left', false)">←</button>
+            <button class="control-button"
+                    onmousedown="setKey('down', true)" onmouseup="setKey('down', false)"
+                    ontouchstart="setKey('down', true)" ontouchend="setKey('down', false)">↓</button>
+            <button class="control-button"
+                    onmousedown="setKey('right', true)" onmouseup="setKey('right', false)"
+                    ontouchstart="setKey('right', true)" ontouchend="setKey('right', false)">→</button>
+        </div>
+        
+        <button class="jetpack-button"
+                onmousedown="setKey('space', true)" onmouseup="setKey('space', false)"
+                ontouchstart="setKey('space', true)" ontouchend="setKey('space', false)">Money Flight</button>
+    </div>
+
+    <script>
+        // Game constants
+        const GAME_WIDTH = 800;
+        const GAME_HEIGHT = 400;
+        const PLAYER_SIZE = 30;
+        const GRAVITY = 0.3;
+        const JETPACK_FORCE = -0.8;
+        const PLAYER_SPEED = 4;
+        const SCROLL_SPEED = 3;
+        const OBSTACLE_WIDTH = 30;
+        const OBSTACLE_MIN_HEIGHT = 50;
+        const OBSTACLE_MAX_HEIGHT = 120;
+
+        // Game state
+        let gameState = {
+            player: { x: 100, y: GAME_HEIGHT / 2, velocityX: 0, velocityY: 0 },
+            obstacles: [],
+            score: 0,
+            gameStarted: false,
+            gameOver: false,
+            jetpackActive: false
+        };
+
+        // Input handling
+        const keys = { left: false, right: false, up: false, down: false, space: false };
+
+        // DOM elements
+        const gameArea = document.getElementById('gameArea');
+        const playerElement = document.getElementById('player');
+        const scoreElement = document.getElementById('score');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreElement = document.getElementById('finalScore');
+        const mobileControls = document.getElementById('mobileControls');
+
+        let gameLoopId;
+        let obstacleCounter = 0;
+
+        // Keyboard event listeners
+        document.addEventListener('keydown', (event) => {
+            switch (event.code) {
+                case 'KeyW':
+                case 'ArrowUp': keys.up = true; break;
+                case 'KeyS':
+                case 'ArrowDown': keys.down = true; break;
+                case 'KeyA':
+                case 'ArrowLeft': keys.left = true; break;
+                case 'KeyD':
+                case 'ArrowRight': keys.right = true; break;
+                case 'Space': event.preventDefault(); keys.space = true; break;
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            switch (event.code) {
+                case 'KeyW':
+                case 'ArrowUp': keys.up = false; break;
+                case 'KeyS':
+                case 'ArrowDown': keys.down = false; break;
+                case 'KeyA':
+                case 'ArrowLeft': keys.left = false; break;
+                case 'KeyD':
+                case 'ArrowRight': keys.right = false; break;
+                case 'Space': keys.space = false; break;
+            }
+        });
+
+        // Touch control helper
+        function setKey(key, value) { keys[key] = value; }
+
+        // Generate obstacle
+        function generateObstacle(x) {
+            const height = OBSTACLE_MIN_HEIGHT + Math.random() * (OBSTACLE_MAX_HEIGHT - OBSTACLE_MIN_HEIGHT);
+            const y = Math.random() * (GAME_HEIGHT - height);
+            const obstacle = document.createElement('div');
+            obstacle.className = 'obstacle';
+            obstacle.style.left = x + 'px';
+            obstacle.style.top = y + 'px';
+            obstacle.style.width = OBSTACLE_WIDTH + 'px';
+            obstacle.style.height = height + 'px';
+            obstacle.dataset.id = obstacleCounter++;
+            gameArea.appendChild(obstacle);
+            return { id: obstacle.dataset.id, element: obstacle, x: x, y: y, width: OBSTACLE_WIDTH, height: height };
+        }
+
+        // Check collision
+        function checkCollision(player, obstacle) {
+            return (
+                player.x < obstacle.x + obstacle.width &&
+                player.x + PLAYER_SIZE > obstacle.x &&
+                player.y < obstacle.y + obstacle.height &&
+                player.y + PLAYER_SIZE > obstacle.y
+            );
+        }
+
+        // Update player position
+        function updatePlayerPosition() {
+            playerElement.style.left = gameState.player.x + 'px';
+            playerElement.style.top = gameState.player.y + 'px';
+        }
+
+        // Update jetpack flames
+        function updateJetpackFlames() {
+            const existingFlames = gameArea.querySelectorAll('.jetpack-flame');
+            existingFlames.forEach(flame => flame.remove());
+            if (gameState.jetpackActive && gameState.gameStarted && !gameState.gameOver) {
+                const flame1 = document.createElement('div');
+                flame1.className = 'jetpack-flame';
+                flame1.style.left = (gameState.player.x - 8) + 'px';
+                flame1.style.top = (gameState.player.y + PLAYER_SIZE) + 'px';
+                flame1.style.width = '12px'; flame1.style.height = '20px';
+                gameArea.appendChild(flame1);
+                const flame2 = document.createElement('div');
+                flame2.className = 'jetpack-flame';
+                flame2.style.left = (gameState.player.x + PLAYER_SIZE - 4) + 'px';
+                flame2.style.top = (gameState.player.y + PLAYER_SIZE) + 'px';
+                flame2.style.width = '12px'; flame2.style.height = '20px';
+                gameArea.appendChild(flame2);
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameState.gameStarted || gameState.gameOver) return;
+            const player = gameState.player;
+            if (keys.left && player.x > 0) player.x -= PLAYER_SPEED;
+            if (keys.right && player.x < GAME_WIDTH - PLAYER_SIZE) player.x += PLAYER_SPEED;
+            if (keys.up && player.y > 0) player.velocityY -= 0.5;
+            if (keys.down && player.y < GAME_HEIGHT - PLAYER_SIZE) player.velocityY += 0.5;
+            gameState.jetpackActive = keys.space;
+            if (keys.space) player.velocityY += JETPACK_FORCE;
+            player.velocityY += GRAVITY;
+            player.velocityY = Math.max(-8, Math.min(8, player.velocityY));
+            player.y += player.velocityY;
+            if (player.y < 0) { player.y = 0; player.velocityY = 0; }
+            if (player.y > GAME_HEIGHT - PLAYER_SIZE) { player.y = GAME_HEIGHT - PLAYER_SIZE; player.velocityY = 0; }
+            gameState.obstacles = gameState.obstacles.filter(obstacle => {
+                obstacle.x -= SCROLL_SPEED;
+                obstacle.element.style.left = obstacle.x + "px";
+                if (obstacle.x < -OBSTACLE_WIDTH) { obstacle.element.remove(); gameState.score += 10; return false; }
+                return true;
+            });
+            const rightmostObstacle = gameState.obstacles.reduce((max, o) => Math.max(max, o.x), GAME_WIDTH);
+            if (rightmostObstacle < GAME_WIDTH + 200) {
+                const newObstacle = generateObstacle(GAME_WIDTH + 200 + Math.random() * 200);
+                gameState.obstacles.push(newObstacle);
+            }
+            for (const obstacle of gameState.obstacles) {
+                if (checkCollision(player, obstacle)) { endGame(); return; }
+            }
+            gameState.score += 1;
+            updatePlayerPosition();
+            updateJetpackFlames();
+            scoreElement.textContent = 'Score: ' + Math.floor(gameState.score / 10);
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        function startGame() {
+            gameState = {
+                player: { x: 100, y: GAME_HEIGHT / 2, velocityX: 0, velocityY: 0 },
+                obstacles: [],
+                score: 0,
+                gameStarted: true,
+                gameOver: false,
+                jetpackActive: false
+            };
+            const existingObstacles = gameArea.querySelectorAll('.obstacle');
+            existingObstacles.forEach(o => o.remove());
+            gameState.obstacles.push(generateObstacle(GAME_WIDTH + 100));
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            mobileControls.classList.remove('hidden');
+            gameLoop();
+        }
+
+        // Restart game
+        function restartGame() {
+            gameOverScreen.classList.add('hidden');
+            startGame();
+        }
+
+        // End game
+        function endGame() {
+            gameState.gameOver = true;
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+            mobileControls.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+            finalScoreElement.textContent = 'Final Score: ' + Math.floor(gameState.score / 10);
+        }
+
+        updatePlayerPosition();
+    </script>
+</body>
+</html>
